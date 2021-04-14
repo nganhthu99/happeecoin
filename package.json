@@ -1,0 +1,19 @@
+{
+  "name": "happeecoin",
+  "version": "1.0.0",
+  "description": "",
+  "main": "Block.js",
+  "dependencies": {
+    "body-parser": "^1.19.0",
+    "crypto-js": "^4.0.0",
+    "express": "^4.17.1",
+    "nodemon": "^2.0.7",
+    "ws": "^7.4.4"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "start": "nodemon Main.js"
+  },
+  "author": "",
+  "license": "ISC"
+}

@@ -1,3 +1,4 @@
+const { processTransactions } = require("./Transaction");
 const { broadcastLatest } = require("./P2PServer");
 const { Block, calculateHashForBlock } = require('./Block')
 const { hexToBinary } = require('./util/hexToBinary')
@@ -12,6 +13,9 @@ const genesisBlock = new Block (
 )
 
 let chain = [genesisBlock]
+
+// unspent transaction output
+let unspentTxOuts = [] // UnspentTxOut[]
 
 const getBlockchain = () => {
     return chain
@@ -41,6 +45,13 @@ const generateNextBlock = (blockData) => {
 
 const addBlockToChain = (newBlock) => {
     if (isValidBlock(newBlock, getLatestBlock())) {
+        // transaction
+        const retVal = processTransactions(newBlock.data, unspentTxOuts, newBlock.index)
+        if (retVal === null) {
+            return false
+        }
+        unspentTxOuts = retVal
+
         chain.push(newBlock)
         return true
     }
@@ -181,9 +192,9 @@ const findBlock = (index, timestamp, data, previousHash, difficulty) => {
 
 // hash validation
 const hashMatchesDifficulty = (hash, difficulty) => {
-    const hashInBinary = hexToBinary(hash);
-    const requiredPrefix = '0'.repeat(difficulty);
-    return hashInBinary.startsWith(requiredPrefix);
+    const hashInBinary = hexToBinary(hash)
+    const requiredPrefix = '0'.repeat(difficulty)
+    return hashInBinary.startsWith(requiredPrefix)
 }
 
 // replace chain: not by length, but by cumulative difficulty

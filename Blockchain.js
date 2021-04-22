@@ -1,5 +1,5 @@
-const { processTransactions } = require("./Transaction");
-const { broadcastLatest } = require("./P2PServer");
+const { processTransactions } = require("./Transaction")
+const { broadcastLatest } = require("./P2PServer")
 const { Block, calculateHashForBlock } = require('./Block')
 const { hexToBinary } = require('./util/hexToBinary')
 
@@ -12,10 +12,13 @@ const genesisBlock = new Block (
     0
 )
 
-let chain = [genesisBlock]
-
-// unspent transaction output
 let unspentTxOuts = [] // UnspentTxOut[]
+
+const getUnspentTxOuts = () => {
+    return unspentTxOuts
+}
+
+let chain = [genesisBlock] // Block[]
 
 const getBlockchain = () => {
     return chain
@@ -30,8 +33,6 @@ const generateNextBlock = (blockData) => {
     const nextIndex = latestBlock.index + 1
     const nextTimestamp = Date.now()
 
-    // const newBlock = new Block(nextIndex, nextTimestamp, blockData, latestBlock.hash)
-
     // find block
     const difficulty = getDifficulty()
     const newBlock = findBlock(nextIndex, nextTimestamp, blockData, latestBlock.hash, difficulty)
@@ -40,12 +41,49 @@ const generateNextBlock = (blockData) => {
         broadcastLatest()
         return newBlock
     }
+
     return null
 }
 
+// // transaction
+// const generateRawNextBlock = (blockData) => {
+//     const previousBlock = getLatestBlock();
+//     const nextIndex = previousBlock.index + 1;
+//     const nextTimestamp = Date.now();
+//
+//     const difficulty = getDifficulty(getBlockchain());
+//     const newBlock = findBlock(nextIndex, previousBlock.hash, nextTimestamp, blockData, difficulty);
+//
+//     if (addBlockToChain(newBlock)) {
+//         broadcastLatest()
+//         return newBlock
+//     }
+//
+//     return null
+// }
+//
+// const generateNextBlock = () => {
+//     const coinbaseTx = getCoinbaseTransaction(getPublicKey(getPrivateFromWallet), getLatestBlock().index + 1);
+//     const blockData = [coinbaseTx];
+//     return generateRawNextBlock(blockData);
+// }
+//
+// const generateNextBlockWithTransaction = (receiverAddress, amount) => {
+//     if (!isValidAddress(receiverAddress)) {
+//         throw Error('invalid address');
+//     }
+//     if (typeof amount !== 'number') {
+//         throw Error('invalid amount');
+//     }
+//     const coinbaseTx = getCoinbaseTransaction(getPublicKey(getPrivateFromWallet), getLatestBlock().index + 1);
+//     const tx = createTransaction(receiverAddress, amount, getPrivateKeyFromWallet());
+//     const blockData = [coinbaseTx, tx];
+//     return generateRawNextBlock(blockData);
+// }
+
 const addBlockToChain = (newBlock) => {
     if (isValidBlock(newBlock, getLatestBlock())) {
-        // transaction
+        // process transactions before adding block of transactions into block chain
         const retVal = processTransactions(newBlock.data, unspentTxOuts, newBlock.index)
         if (retVal === null) {
             return false
@@ -58,15 +96,15 @@ const addBlockToChain = (newBlock) => {
     return false
 }
 
-const replaceChain = (newBlockChain) => {
-    // if (isValidChain(newBlockChain) &&
-    //     newBlockChain.length > getBlockchain().length) {
-    //     console.log('Received blockchain is valid.' +
-    //         '\nReplacing current blockchain with received blockchain.')
-    //     chain = newBlockChain
-    //     broadcastLatest()
-    // }
+// replace chain: not by length, but by cumulative difficulty
+const getAccumulatedDifficulty = (aBlockchain) => {
+    return aBlockchain
+        .map((block) => block.difficulty)
+        .map((difficulty) => Math.pow(2, difficulty))
+        .reduce((a, b) => a + b);
+}
 
+const replaceChain = (newBlockChain) => {
     // replace chain: not by length, but by cumulative difficulty
     if (isValidChain(newBlockChain) &&
         getAccumulatedDifficulty(newBlockChain) > getAccumulatedDifficulty(chain)) {
@@ -197,20 +235,15 @@ const hashMatchesDifficulty = (hash, difficulty) => {
     return hashInBinary.startsWith(requiredPrefix)
 }
 
-// replace chain: not by length, but by cumulative difficulty
-const getAccumulatedDifficulty = (aBlockchain) => {
-    return aBlockchain
-        .map((block) => block.difficulty)
-        .map((difficulty) => Math.pow(2, difficulty))
-        .reduce((a, b) => a + b);
-}
-
 module.exports = {
+    getUnspentTxOuts,
+
     getBlockchain,
     getLatestBlock,
     generateNextBlock,
     addBlockToChain,
     replaceChain,
+
     isValidBlockStructure,
     isValidBlock,
     isValidChain

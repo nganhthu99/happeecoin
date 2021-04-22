@@ -1,5 +1,8 @@
+const ecdsa = require('elliptic')
+const ec = new ecdsa.ec('secp256k1')
 const SHA256 = require('crypto-js/sha256');
 const binaryToHex = require('./util/binaryToHex')
+const { getUnspentTxOuts } = require("./Blockchain");
 const { getPublicKey } = require("./Wallet");
 const { TxOut } = require("./TransactionOutput");
 const { TxIn } = require("./TransactionInput");
@@ -27,20 +30,26 @@ const getTransactionId = (transaction) => {
     return SHA256(txInContent + txOutContent).toString();
 }
 
+// get coinbase reward transaction
 const getCoinbaseTransaction = (address, blockIndex) => {
-    const t = new Transaction();
-    const txIn = new TxIn();
-    txIn.signature = "";
-    txIn.txOutTransactionId = "";
-    txIn.txOutIndex = blockIndex;
+    const newTransaction = new Transaction()
 
-    t.txIns = [txIn];
-    t.txOuts = [new TxOut(address, COINBASE_AMOUNT)];
-    t.id = getTransactionId(t);
-    return t;
+    const txIn = new TxIn()
+    txIn.signature = ""
+    txIn.txOutTransactionId = ""
+    txIn.txOutIndex = blockIndex
+    newTransaction.txIns = [txIn]
+
+    newTransaction.txOuts = [new TxOut(address, COINBASE_AMOUNT)]
+
+    newTransaction.id = getTransactionId(t)
+
+    return newTransaction
 }
 
-const findUnspentTxOut = (txOutTransactionId, txOutIndex, unspentTxOuts) => {
+// find if a txIn is a valid unspentTxOut
+const findUnspentTxOut = (txOutTransactionId, txOutIndex) => {
+    const unspentTxOuts = getUnspentTxOuts()
     return unspentTxOuts.find((uTxO) => {
         return (
             uTxO.txOutTransactionId === txOutTransactionId &&
@@ -49,7 +58,10 @@ const findUnspentTxOut = (txOutTransactionId, txOutIndex, unspentTxOuts) => {
     })
 }
 
-const signTxIn = (transaction, txInIndex, privateKey, unspentTxOuts) => {
+// sign a txIn in a transaction
+const signTxIn = (transaction, txInIndex, privateKey) => {
+    const unspentTxOuts = getUnspentTxOuts()
+
     const txIn = transaction.txIns[txInIndex]
 
     const referencedUnspentTxOut = findUnspentTxOut(txIn.txOutTransactionId, txIn.txOutIndex, unspentTxOuts);
@@ -72,10 +84,12 @@ const signTxIn = (transaction, txInIndex, privateKey, unspentTxOuts) => {
     return signature;
 }
 
-const updateUnspentTxOuts = (newTransactions, unspentTxOuts) => {
+// update unspent transaction outputs after making new transactions
+const updateUnspentTxOuts = (newTransactions) => {
+    const unspentTxOuts = getUnspentTxOuts()
+
     const newUnspentTxOuts = newTransactions
-        .map((t) => t.txOuts)
-        .map((txOut, index) => new UnspentTxOut(t.id, index, txOut.address, txOut.amount))
+        .map((t) => t.txOuts.map((txOut, index) => new UnspentTxOut(t.id, index, txOut.address, txOut.amount)))
         .reduce((a, b) => a.concat(b), []);
 
     const consumedTxOuts = newTransactions
@@ -177,7 +191,9 @@ const isValidTransactionsStructure = (transactions) => {
 }
 
 // validateBlockTransactions
-const validateTxIn = (txIn, transaction, unspentTxOuts) => {
+const validateTxIn = (txIn, transaction) => {
+    const unspentTxOuts = getUnspentTxOuts()
+
     const referencedUTxOut = unspentTxOuts.find((uTxO) => {
         return (
             uTxO.txOutTransactionId === txIn.txOutTransactionId &&
@@ -192,6 +208,36 @@ const validateTxIn = (txIn, transaction, unspentTxOuts) => {
 
     const key = ec.keyFromPublic(referencedUTxOut.address, 'hex');
     return key.verify(transaction.id, txIn.signature);
+}
+
+const validateTransaction = (transaction) => {
+    const unspentTxOuts = getUnspentTxOuts()
+
+    if (getTransactionId(transaction) !== transaction.id) {
+        console.log('Invalid tx id: ' + transaction.id)
+        return false
+    }
+
+    const hasValidTxIns = transaction.txIns
+        .map((txIn) => validateTxIn(txIn, transaction, unspentTxOuts))
+        .reduce((a, b) => a && b, true)
+    if (!hasValidTxIns) {
+        console.log('Some of the txIns are invalid in tx: ' + transaction.id)
+        return false
+    }
+
+    const totalTxInValues = transaction.txIns
+        .map((txIn) => findUnspentTxOut(txIn.txOutTransactionId, txIn.txOutIndex, aUnspentTxOuts).amount)
+        .reduce((a, b) => (a + b), 0)
+    const totalTxOutValues = transaction.txOuts
+        .map((txOut) => txOut.amount)
+        .reduce((a, b) => (a + b), 0)
+    if (totalTxOutValues !== totalTxInValues) {
+        console.log('totalTxOutValues !== totalTxInValues in tx: ' + transaction.id)
+        return false
+    }
+
+    return true
 }
 
 const validateCoinbaseTx = (transaction, blockIndex) => {
@@ -212,47 +258,19 @@ const validateCoinbaseTx = (transaction, blockIndex) => {
         return false
     }
     if (transaction.txOuts.length !== 1) {
-        console.log('invalid number of txOuts in coinbase transaction')
+        console.log('Invalid number of txOuts in coinbase transaction')
         return false
     }
-    if (transaction.txOuts[0].amount != COINBASE_AMOUNT) {
-        console.log('invalid coinbase amount in coinbase transaction')
+    if (transaction.txOuts[0].amount !== COINBASE_AMOUNT) {
+        console.log('Invalid coinbase amount in coinbase transaction')
         return false
     }
     return true
 }
 
-const validateTransaction = (transaction, unspentTxOuts) => {
-    if (getTransactionId(transaction) !== transaction.id) {
-        console.log('Invalid tx id: ' + transaction.id)
-        return false
-    }
+const validateBlockTransactions = (transactions, blockIndex) => {
+    const unspentTxOuts = getUnspentTxOuts()
 
-    const hasValidTxIns = transaction.txIns
-        .map((txIn) => validateTxIn(txIn, transaction, unspentTxOuts))
-        .reduce((a, b) => a && b, true)
-
-    if (!hasValidTxIns) {
-        console.log('Some of the txIns are invalid in tx: ' + transaction.id)
-        return false
-    }
-    const totalTxInValues = transaction.txIns
-        .map((txIn) => findUnspentTxOut(txIn.txOutTransactionId, txIn.txOutIndex, aUnspentTxOuts).amount)
-        .reduce((a, b) => (a + b), 0)
-
-    const totalTxOutValues = transaction.txOuts
-        .map((txOut) => txOut.amount)
-        .reduce((a, b) => (a + b), 0)
-
-    if (totalTxOutValues !== totalTxInValues) {
-        console.log('totalTxOutValues !== totalTxInValues in tx: ' + transaction.id)
-        return false
-    }
-
-    return true
-}
-
-const validateBlockTransactions = (transactions, unspentTxOuts, blockIndex) => {
     const hasDuplicates = (txIns) => {
         const groups = _.countBy(txIns, (txIn) => txIn.txOutTransactionId + txIn.txOutTransactionId);
         return _(groups)
@@ -289,17 +307,18 @@ const validateBlockTransactions = (transactions, unspentTxOuts, blockIndex) => {
         .reduce((a, b) => (a && b), true);
 }
 
-const processTransactions = (transactions, unspentTxOuts, blockIndex) => {
+// process transactions
+const processTransactions = (transactions, blockIndex) => {
     if (!isValidTransactionsStructure(transactions)) {
         return null;
     }
 
-    if (!validateBlockTransactions(transactions, unspentTxOuts, blockIndex)) {
+    if (!validateBlockTransactions(transactions, blockIndex)) {
         console.log('Invalid block transactions');
         return null;
     }
 
-    return updateUnspentTxOuts(transactions, unspentTxOuts);
+    return updateUnspentTxOuts(transactions);
 }
 
 module.exports = {
@@ -307,6 +326,6 @@ module.exports = {
     getTransactionId,
     getCoinbaseTransaction,
     signTxIn,
-    processTransactions,
+    processTransactions
 }
 

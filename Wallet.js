@@ -42,10 +42,10 @@ const getPublicKeyFromWallet = () => {
 }
 
 // get balance from a (public key === address)
-const getBalance = (unspentTxOuts) => {
+const getBalance = (address, unspentTxOuts) => {
     console.log("GET BALANCE")
 
-    const address = getPublicKeyFromWallet()
+    // const address = getPublicKeyFromWallet()
     return _(unspentTxOuts)
         .filter((uTxO) => uTxO.address === address)
         .map((uTxO) => uTxO.amount)

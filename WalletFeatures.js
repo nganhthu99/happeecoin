@@ -1,10 +1,10 @@
-const { getBalance, createTransaction } = require("./Wallet")
+const { getPublicKeyFromWallet, getBalance, createTransaction } = require("./Wallet")
 const { getTransactionPool, addTransactionToPool } = require("./TransactionPool")
 const { getUnspentTxOuts, generateNextBlock, addBlockToChain } = require("./Blockchain")
 const { broadcastLatest, broadcastTransactionPool } = require("./P2PServer")
 
 const getBalanceAccount = () => {
-    return getBalance(getUnspentTxOuts())
+    return getBalance(getPublicKeyFromWallet(), getUnspentTxOuts())
 }
 
 const sendTransaction = (receiverAddress, amount) => {
@@ -23,9 +23,18 @@ const mineBlock = () => {
     return null
 }
 
+const getMyUnspentTxOuts = () => {
+    const myAddress = getPublicKeyFromWallet()
+    const unspentTxOuts = getUnspentTxOuts()
+    return unspentTxOuts.filter((txOut) => {
+        return txOut.address === myAddress
+    })
+}
+
 module.exports = {
     getBalanceAccount,
     sendTransaction,
-    mineBlock
+    mineBlock,
+    getMyUnspentTxOuts
 }
 

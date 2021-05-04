@@ -1,14 +1,17 @@
 const express = require('express')
 const bodyParser = require('body-parser')
 const _ = require('lodash')
-const { getBalanceAccount, sendTransaction, mineBlock } = require("./WalletFeatures")
+const cors = require('cors')
+const {initWallet, getPublicKeyFromWallet, getBalance} = require("./Wallet");
+const { getBalanceAccount, sendTransaction, mineBlock, getMyUnspentTxOuts } = require("./WalletFeatures")
 const { getTransactionPool } = require("./TransactionPool")
-const { getBlockchain, getUnspentTxOuts } = require("./Blockchain")
+const { getBlockchain, getLatestBlock, getUnspentTxOuts } = require("./Blockchain")
 const { getSockets, connectToPeers } = require("./P2PServer")
 
 const initHttpServer = (httpPort) => {
     const app = express()
 
+    app.use(cors())
     app.use(bodyParser.json())
 
     app.use((err, req, res, next) => {
@@ -18,6 +21,18 @@ const initHttpServer = (httpPort) => {
     })
 
     // Happee Explorer
+    app.get('/difficulty', (req, res) => {
+        res.send({difficulty: getLatestBlock().difficulty})
+    })
+
+    app.get('/chain-length', (req, res) => {
+        res.send({length: getLatestBlock().index + 1})
+    })
+
+    app.get('/pool-size', (req, res) => {
+        res.send({size: getTransactionPool().length})
+    })
+
     app.get('/blocks', (req, res) => {
         res.send(getBlockchain())
     })
@@ -30,23 +45,64 @@ const initHttpServer = (httpPort) => {
         res.send(getTransactionPool())
     })
 
-    app.get('/block/:hash', (req, res) => {
-        const block = _.find(getBlockchain(), {'hash' : req.params.hash})
-        res.send(block)
+    app.get('/block', (req, res) => {
+        let block
+        console.log(req.query)
+        if (req.query.hash) {
+            block = _.find(getBlockchain(), {'hash': req.query.hash})
+        } else if (req.query.index) {
+            block = _.find(getBlockchain(), {'index': Number(req.query.index)})
+        }
+        if (block) {
+            res.send(block)
+        } else {
+            res.status(400).send("Found no block")
+        }
     })
 
     app.get('/transaction/:id', (req, res) => {
-        const transaction = _(getBlockchain())
+        const confirmedTransaction = _(getBlockchain())
             .map((blocks) => blocks.data)
             .flatten()
             .find({'id': req.params.id})
-        res.send(transaction)
+
+        const unconfirmedTransaction = _.find(getTransactionPool(), {'id': req.params.id})
+
+        if (confirmedTransaction) {
+            confirmedTransaction.confirmed = true
+            res.send(confirmedTransaction)
+        } else if (unconfirmedTransaction) {
+            unconfirmedTransaction.confirmed = false
+            res.send(unconfirmedTransaction)
+        } else {
+            res.status(400).send("Found no transaction")
+        }
+    })
+
+    // app.get('/transaction/:id', (req, res) => {
+    //     const transaction = _.find(getTransactionPool(), {'id': req.params.id})
+    //     res.send(transaction)
+    // })
+
+    app.get('/balance/:address', (req, res) => {
+        const balance = getBalance(req.params.address, getUnspentTxOuts())
+        res.send({'balance': balance})
     })
 
     // Happee Wallet
+    app.get('/address', (req, res) => {
+        const address = getPublicKeyFromWallet()
+        res.send({address: address})
+    })
+
     app.get('/balance', (req, res) => {
         const balance = getBalanceAccount()
         res.send({'balance': balance})
+    })
+
+    app.get('/my-unspent-transaction-outputs', (req, res) => {
+        const myUnspentTxOuts = getMyUnspentTxOuts()
+        res.send({unspentTxOuts: myUnspentTxOuts})
     })
 
     app.post('/send-transaction', (req, res) => {

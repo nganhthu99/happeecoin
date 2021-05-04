@@ -22,7 +22,7 @@ const genesisBlock = new Block (
     1618302806719,
     [genesisTransaction],
     null,
-    0,
+    5,
     0
 )
 
@@ -78,8 +78,7 @@ const findBlock = (index, timestamp, data, previousHash, difficulty) => {
     let nonce = 0
     while (true) {
         const block = new Block(index, timestamp, data, previousHash, difficulty, nonce)
-        const hash = calculateHashForBlock(block)
-        if (hashMatchesDifficulty(hash, difficulty)) {
+        if (hashMatchesDifficulty(block.hash, difficulty)) {
             return block
         }
         nonce++

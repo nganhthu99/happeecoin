@@ -33,7 +33,7 @@ const genesisTransaction = new Transaction(
         'txOutIndex': 0
     }],
     [{
-        'address': '040ccac3f0823a62c40f2521efb5f3888775e39dc25e225beddbe81f32e3a37d8b3aea125d465b50a9387091b735da378641fff0e09d281f68330b9b408f0153d8',
+        'address': '04e7fbb0ff0e0930b9e200963694fded1d45b019541725e1bd9e68e2ca88a1913dba97a8a5e3e1a2127475b9da07d24ad550618f3efefaad7346e71d4d665b8323',
         'amount': 50
     }]
 )

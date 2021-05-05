@@ -1,4 +1,5 @@
 const _ = require('lodash')
+const fs = require('fs')
 const hexToBinary = require('./util/hexToBinary')
 const { Block, calculateHashForBlock } = require('./Block')
 const { genesisTransaction, getCoinbaseTransaction, processTransactions } = require("./Transaction")
@@ -6,7 +7,9 @@ const { getPublicKeyFromWallet } = require("./Wallet")
 const { getTransactionPool, updateTransactionPool } = require("./TransactionPool")
 
 // Unspent transaction outputs
-let unspentTxOuts = processTransactions([genesisTransaction], 0, []) // UnspentTxOut[]
+// let unspentTxOuts = processTransactions([genesisTransaction], 0, []) // UnspentTxOut[]
+
+let unspentTxOuts = []
 
 const getUnspentTxOuts = () => {
     return _.cloneDeep(unspentTxOuts)
@@ -17,6 +20,28 @@ const setUnspentTxOuts = (newUnspentTxOut) => {
 }
 
 // Blockchain
+let chain = [] // Block[]
+
+const blockchainLocation = 'node/blockchain/data'
+
+const initBlockchain = () => {
+    if (fs.existsSync(blockchainLocation)) {
+        let buffer = fs.readFileSync(blockchainLocation, 'utf8')
+        chain = JSON.parse(buffer)
+        unspentTxOuts = processChain(chain)
+        console.log("DSADSADSADAS: ", unspentTxOuts)
+        return
+    }
+
+    chain = [genesisBlock]
+    unspentTxOuts = processChain(chain)
+    saveBlockchain()
+}
+
+const saveBlockchain = () => {
+    fs.writeFileSync(blockchainLocation, JSON.stringify(chain), 'utf8')
+}
+
 const genesisBlock = new Block (
     0,
     1618302806719,
@@ -25,8 +50,6 @@ const genesisBlock = new Block (
     5,
     0
 )
-
-let chain = [genesisBlock] // Block[]
 
 const getBlockchain = () => {
     return chain
@@ -111,6 +134,7 @@ const addBlockToChain = (newBlock) => {
             return false
         }
         chain.push(newBlock)
+        saveBlockchain()
         setUnspentTxOuts(updateUnspentTxOuts)
         updateTransactionPool(unspentTxOuts)
         return true
@@ -127,6 +151,8 @@ const getAccumulatedDifficulty = (aBlockchain) => {
 }
 
 const processChain = (newBlockchain) => {
+    console.log("PROCESS CHAIN")
+
     let aUnspentTxOuts = []
 
     for (let i = 0; i < newBlockchain.length; i++) {
@@ -149,6 +175,7 @@ const replaceChain = (newBlockChain) => {
             return false
         }
         chain = newBlockChain
+        saveBlockchain()
         setUnspentTxOuts(updateUnspentTxOuts)
         updateTransactionPool(updateUnspentTxOuts)
         return true
@@ -225,6 +252,8 @@ const isValidChain = (blockchainToValidate) => {
 }
 
 module.exports = {
+    initBlockchain,
+
     getUnspentTxOuts,
 
     getBlockchain,

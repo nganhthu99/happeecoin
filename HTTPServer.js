@@ -2,7 +2,7 @@ const express = require('express')
 const bodyParser = require('body-parser')
 const _ = require('lodash')
 const cors = require('cors')
-const {initWallet, getPublicKeyFromWallet, getBalance} = require("./Wallet");
+const { getPublicKeyFromWallet, getBalance } = require("./Wallet");
 const { getBalanceAccount, sendTransaction, mineBlock, getMyUnspentTxOuts } = require("./WalletFeatures")
 const { getTransactionPool } = require("./TransactionPool")
 const { getBlockchain, getLatestBlock, getUnspentTxOuts } = require("./Blockchain")
@@ -37,17 +37,16 @@ const initHttpServer = (httpPort) => {
         res.send(getBlockchain())
     })
 
-    app.get('/unspent-transaction-outs', (req, res) => {
-        res.send(getUnspentTxOuts())
-    })
-
     app.get('/transaction-pool', (req, res) => {
         res.send(getTransactionPool())
     })
 
+    app.get('/unspent-transaction-outs', (req, res) => {
+        res.send(getUnspentTxOuts())
+    })
+
     app.get('/block', (req, res) => {
         let block
-        console.log(req.query)
         if (req.query.hash) {
             block = _.find(getBlockchain(), {'hash': req.query.hash})
         } else if (req.query.index) {
@@ -78,11 +77,6 @@ const initHttpServer = (httpPort) => {
             res.status(400).send("Found no transaction")
         }
     })
-
-    // app.get('/transaction/:id', (req, res) => {
-    //     const transaction = _.find(getTransactionPool(), {'id': req.params.id})
-    //     res.send(transaction)
-    // })
 
     app.get('/balance/:address', (req, res) => {
         const balance = getBalance(req.params.address, getUnspentTxOuts())
